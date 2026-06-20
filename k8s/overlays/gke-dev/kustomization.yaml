@@ -17,16 +17,36 @@ patches:
       name: api
     patch: |
       - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
         path: /spec/template/spec/containers/0/imagePullPolicy
         value: Always
+  - target:
+      kind: Deployment
+      name: frontend
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: api-hpa
+    patch: |
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+      - op: replace
+        path: /spec/maxReplicas
+        value: 2
 
 images:
   - name: kubelab-api
     newName: REGION-docker.pkg.dev/PROJECT_ID/kubelab/api
-    newTag: latest
+    newTag: IMAGE_TAG
   - name: kubelab-worker
     newName: REGION-docker.pkg.dev/PROJECT_ID/kubelab/worker
-    newTag: latest
+    newTag: IMAGE_TAG
   - name: kubelab-frontend
     newName: REGION-docker.pkg.dev/PROJECT_ID/kubelab/frontend
-    newTag: latest
+    newTag: IMAGE_TAG

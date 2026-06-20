@@ -8,6 +8,7 @@ ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 OVERLAY="${1:-gke-dev}"
 PROJECT_ID="${GCP_PROJECT_ID:-$(gcloud config get-value project 2>/dev/null)}"
 REGION="${GCP_REGION:-us-central1}"
+IMAGE_TAG="${IMAGE_TAG:-latest}"
 
 if [[ -z "$PROJECT_ID" || "$PROJECT_ID" == "(unset)" ]]; then
   echo "Error: Set GCP_PROJECT_ID or configure gcloud project"
@@ -22,7 +23,7 @@ if [[ ! -d "$OVERLAY_DIR" ]]; then
 fi
 
 echo "==> Deploying KubeLab (overlay: $OVERLAY)"
-echo "    Project: $PROJECT_ID | Region: $REGION"
+echo "    Project: $PROJECT_ID | Region: $REGION | Tag: $IMAGE_TAG"
 echo ""
 
 # Build kustomize output with project/region substitution
@@ -36,6 +37,7 @@ fi
 "${KUSTOMIZE[@]}" "$OVERLAY_DIR" \
   | sed "s/PROJECT_ID/${PROJECT_ID}/g" \
   | sed "s/REGION/${REGION}/g" \
+  | sed "s/IMAGE_TAG/${IMAGE_TAG}/g" \
   > "$TMP_DIR/manifests.yaml"
 
 echo "--- Preview (first 30 lines)"

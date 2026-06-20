@@ -5,98 +5,127 @@ Automating build, test, and deploy with GitHub Actions and GCP Workload Identity
 ## The Pipeline
 
 ```
-git push → GitHub Actions → Build images → Push to Artifact Registry → Deploy to GKE
+git push (main) → GitHub Actions
+                    ├── Test (compile Go, validate manifests)
+                    ├── Build (Cloud Build → Artifact Registry, tag = git SHA)
+                    └── Deploy (kubectl apply gke-dev overlay → GKE)
 ```
 
 See `.github/workflows/ci.yaml`.
 
-## Stages
+| Event | What runs |
+|-------|-----------|
+| Pull request | Test only |
+| Push to `main` | Test → Build → Deploy |
+| Manual (`workflow_dispatch`) | Test → Build (Deploy only on `main`) |
+
+## One-Time GCP Setup (Cloud Shell)
+
+Run once for project `learning-deplo` and repo `batmnnn/kube`:
+
+```bash
+cd ~/kube
+chmod +x scripts/setup-github-cicd.sh
+
+export GCP_PROJECT_ID=learning-deplo
+export GITHUB_REPO=batmnnn/kube
+
+./scripts/setup-github-cicd.sh
+```
+
+This creates:
+
+- Workload Identity pool + GitHub OIDC provider
+- `github-ci@learning-deplo.iam.gserviceaccount.com` service account
+- IAM: Artifact Registry writer, GKE developer, Cloud Build editor
+
+**Prerequisites:** GKE cluster and Artifact Registry repo must already exist (`./scripts/cloud-shell-setup.sh`).
+
+## GitHub Secrets
+
+In https://github.com/batmnnn/kube → **Settings → Secrets and variables → Actions**:
+
+| Secret | Example value |
+|--------|---------------|
+| `GCP_PROJECT_ID` | `learning-deplo` |
+| `GKE_CLUSTER` | `kubelab-cluster` |
+| `WIF_PROVIDER` | `projects/663804652181/locations/global/workloadIdentityPools/github-pool/providers/github-provider` |
+| `WIF_SERVICE_ACCOUNT` | `github-ci@learning-deplo.iam.gserviceaccount.com` |
+
+The setup script prints the exact `WIF_PROVIDER` value for your project.
+
+## What Each Job Does
 
 ### 1. Test (every PR and push)
 
 - Compile Go API and worker
-- Validate Kustomize manifests render without errors
+- Validate Kustomize overlays render without errors
 
-### 2. Build & Push (main branch only)
+### 2. Build & Push (not on PRs)
 
-- Authenticate to GCP via Workload Identity Federation (no JSON keys!)
-- Build and push all 3 images tagged with git SHA
-- Deploy to GKE using `scripts/deploy.sh`
+- Authenticate to GCP via Workload Identity Federation (no JSON keys)
+- Run `gcloud builds submit` using `cloudbuild.yaml`
+- Tag images with git commit SHA: `us-central1-docker.pkg.dev/PROJECT/kubelab/{api,worker,frontend}:SHA`
+- Also tags `:latest` on `main` branch
 
-## Workload Identity Federation Setup
+### 3. Deploy (main branch pushes only)
 
-This lets GitHub Actions authenticate to GCP without storing service account keys.
+- `get-gke-credentials` for `kubelab-cluster`
+- `./scripts/deploy.sh gke-dev` with `IMAGE_TAG=$GITHUB_SHA`
+- Waits for rollouts and runs an in-cluster smoke test
 
-### 1. Create WIF Pool and Provider
+## Manifest Fixes Baked In
 
-```bash
-gcloud iam workload-identity-pools create github-pool \
-  --location=global \
-  --display-name="GitHub Actions"
+The repo manifests now include lessons from manual deploy:
 
-gcloud iam workload-identity-pools providers create-oidc github-provider \
-  --location=global \
-  --workload-identity-pool=github-pool \
-  --issuer-uri=https://token.actions.githubusercontent.com \
-  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
-  --attribute-condition="assertion.repository=='YOUR_ORG/kube'"
-```
+- **NEG annotations** on `api` and `frontend` Services (required for GKE Ingress + ClusterIP)
+- **Separate BackendConfigs** — API `:8080/health`, frontend `:80/`
+- **Frontend nginx** — writable cache volumes + `NET_BIND_SERVICE`
+- **gke-dev overlay** — 1 replica each, HPA min=1 (fits small trial clusters)
 
-### 2. Create CI Service Account
+## Manual Deploy (same as CI)
 
 ```bash
-gcloud iam service-accounts create github-ci \
-  --display-name="GitHub CI"
+export GCP_PROJECT_ID=learning-deplo
+export GCP_REGION=us-central1
+export IMAGE_TAG=latest   # or a git SHA
 
-gcloud projects add-iam-policy-binding $GCP_PROJECT_ID \
-  --member="serviceAccount:github-ci@$GCP_PROJECT_ID.iam.gserviceaccount.com" \
-  --role="roles/artifactregistry.writer"
+gcloud builds submit . --config=cloudbuild.yaml \
+  --substitutions="_REGION=${GCP_REGION},_TAG=${IMAGE_TAG}"
 
-gcloud projects add-iam-policy-binding $GCP_PROJECT_ID \
-  --member="serviceAccount:github-ci@$GCP_PROJECT_ID.iam.gserviceaccount.com" \
-  --role="roles/container.developer"
-```
-
-### 3. GitHub Secrets
-
-Add to your GitHub repo:
-
-| Secret | Value |
-|--------|-------|
-| `GCP_PROJECT_ID` | your-project-id |
-| `GKE_CLUSTER` | kubelab-cluster |
-| `WIF_PROVIDER` | projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/providers/github-provider |
-| `WIF_SERVICE_ACCOUNT` | github-ci@PROJECT.iam.gserviceaccount.com |
-
-## Kustomize Overlays in CI
-
-Different environments use different overlays:
-
-```bash
-# Dev — latest tags, 2 replicas
 ./scripts/deploy.sh gke-dev
-
-# Prod — semver tags, 3+ replicas, stricter config
-./scripts/deploy.sh gke-prod
 ```
 
-## Manual Deploy (without CI)
+Or:
 
 ```bash
-make push TAG=v1.0.0
-IMAGE_TAG=v1.0.0 make deploy OVERLAY=gke-prod
+make push TAG=abc123
+make deploy TAG=abc123 OVERLAY=gke-dev
 ```
+
+## Trigger CI
+
+```bash
+git add .
+git commit -m "feat: add CI/CD pipeline"
+git push origin main
+```
+
+Watch runs at: https://github.com/batmnnn/kube/actions
+
+## Troubleshooting CI
+
+| Failure | Fix |
+|---------|-----|
+| `Permission denied` on WIF auth | Re-run `./scripts/setup-github-cicd.sh`; verify GitHub secrets |
+| Cloud Build push fails | Ensure Cloud Build SA has `artifactregistry.writer` (cloud-shell-setup.sh) |
+| Deploy `ImagePullBackOff` | Check `IMAGE_TAG` in overlay matches built SHA |
+| Rollout timeout | Cluster CPU full — gke-dev uses 1 replica; delete Pending pods |
+| Ingress no IP | NEG + BackendConfig are in manifests now; wait 5–15 min after first deploy |
 
 ## GitOps Alternative
 
 For production teams, consider **Argo CD** or **Flux** — they watch git and sync cluster state automatically. Our push-based CI is simpler for learning.
-
-## Exercise
-
-1. Read `.github/workflows/ci.yaml` line by line
-2. Run the test job locally: `cd app/api && go build .`
-3. Validate manifests: `kubectl kustomize k8s/base | head -50`
-4. Set up WIF (optional) and push to GitHub to trigger CI
 
 ## Next
 

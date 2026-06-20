@@ -1,16 +1,23 @@
-name: CI
+name: CI/CD
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   REGION: us-central1
+  OVERLAY: gke-dev
 
 jobs:
   test:
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,23 +26,79 @@ jobs:
         with:
           go-version: "1.22"
 
-      - name: Build API
+      - name: Compile API
         run: cd app/api && go mod tidy && go build -o /dev/null .
 
-      - name: Build Worker
+      - name: Compile Worker
         run: cd app/worker && go mod tidy && go build -o /dev/null .
 
       - name: Validate Kubernetes manifests
         uses: helm/kind-action@v1
         with:
           install_only: true
-      - run: |
+
+      - name: Kustomize render check
+        run: |
           kubectl kustomize k8s/base > /dev/null
           kubectl kustomize k8s/overlays/local > /dev/null
-          kubectl kustomize k8s/overlays/gke-dev > /dev/null
+          kubectl kustomize k8s/overlays/gke-dev \
+            | sed 's/PROJECT_ID/example/g' \
+            | sed 's/REGION/us-central1/g' \
+            | sed 's/IMAGE_TAG/latest/g' \
+            > /dev/null
 
-  build-and-push:
+  build:
+    name: Build & Push Images
     needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: meta
+        run: echo "image_tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build and push with Cloud Build
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCP_REGION: ${{ env.REGION }}
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+        run: |
+          gcloud builds submit . \
+            --config=cloudbuild.yaml \
+            --substitutions="_REGION=${GCP_REGION},_TAG=${IMAGE_TAG}" \
+            --project="${GCP_PROJECT_ID}"
+
+      - name: Tag images as latest (main branch only)
+        if: github.ref == 'refs/heads/main'
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCP_REGION: ${{ env.REGION }}
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+        run: |
+          REGISTRY="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/kubelab"
+          for img in api worker frontend; do
+            gcloud artifacts docker tags add \
+              "${REGISTRY}/${img}:${IMAGE_TAG}" \
+              "${REGISTRY}/${img}:latest" \
+              --project="${GCP_PROJECT_ID}"
+          done
+
+  deploy:
+    name: Deploy to GKE
+    needs: build
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
@@ -51,22 +114,31 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
-      - name: Configure Docker
-        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+      - uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ secrets.GKE_CLUSTER }}
+          location: ${{ env.REGION }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
 
-      - name: Build and push
+      - name: Deploy manifests
         env:
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
           GCP_REGION: ${{ env.REGION }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: ./scripts/build-and-push.sh
+          IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+        run: ./scripts/deploy.sh ${{ env.OVERLAY }}
 
-      - name: Deploy to GKE
-        if: ${{ secrets.GKE_CLUSTER != '' }}
-        env:
-          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-          GCP_REGION: ${{ env.REGION }}
+      - name: Verify rollouts
         run: |
-          gcloud container clusters get-credentials ${{ secrets.GKE_CLUSTER }} \
-            --region ${{ env.REGION }} --project ${{ secrets.GCP_PROJECT_ID }}
-          IMAGE_TAG=${{ github.sha }} OVERLAY=gke-dev ./scripts/deploy.sh gke-dev
+          kubectl rollout status deployment/api -n kubelab --timeout=180s
+          kubectl rollout status deployment/worker -n kubelab --timeout=180s
+          kubectl rollout status deployment/frontend -n kubelab --timeout=180s
+          kubectl get pods,ingress -n kubelab
+
+      - name: Smoke test (in-cluster)
+        run: |
+          kubectl run ci-smoke-test \
+            --rm -i --restart=Never \
+            --image=curlimages/curl:8.5.0 \
+            -n kubelab \
+            --command -- \
+            sh -c 'curl -sf http://api:8080/health && curl -sf http://frontend/ | head -1'

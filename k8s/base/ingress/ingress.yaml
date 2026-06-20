@@ -10,8 +10,7 @@ metadata:
     kubernetes.io/ingress.class: "gce"
     # Allow HTTP during development; enable HTTPS in production (see docs/05-networking.md)
     kubernetes.io/ingress.allow-http: "true"
-    # Backend config for health checks and timeouts (optional, see backendconfig.yaml)
-    cloud.google.com/backend-config: '{"default": "kubelab-backend-config"}'
+    # Per-service BackendConfig is set on api/frontend Services (different health check ports).
 spec:
   rules:
     - http:

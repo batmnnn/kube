@@ -27,6 +27,7 @@ resources:
   - frontend/service.yaml
   - ingress/ingress.yaml
   - ingress/backendconfig.yaml
+  - ingress/frontend-backendconfig.yaml
   - network-policies/policies.yaml
   - jobs/seed-job.yaml
   - jobs/cronjob.yaml

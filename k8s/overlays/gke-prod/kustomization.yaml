@@ -46,10 +46,10 @@ patches:
 images:
   - name: kubelab-api
     newName: REGION-docker.pkg.dev/PROJECT_ID/kubelab/api
-    newTag: v1.0.0
+    newTag: IMAGE_TAG
   - name: kubelab-worker
     newName: REGION-docker.pkg.dev/PROJECT_ID/kubelab/worker
-    newTag: v1.0.0
+    newTag: IMAGE_TAG
   - name: kubelab-frontend
     newName: REGION-docker.pkg.dev/PROJECT_ID/kubelab/frontend
-    newTag: v1.0.0
+    newTag: IMAGE_TAG

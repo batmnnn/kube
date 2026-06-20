@@ -38,7 +38,7 @@ setup-gke:
 	GCP_PROJECT_ID=$(PROJECT_ID) ./scripts/setup-gke.sh
 
 deploy:
-	GCP_PROJECT_ID=$(PROJECT_ID) GCP_REGION=$(REGION) ./scripts/deploy.sh $(OVERLAY)
+	GCP_PROJECT_ID=$(PROJECT_ID) GCP_REGION=$(REGION) IMAGE_TAG=$(TAG) ./scripts/deploy.sh $(OVERLAY)
 
 local-k8s:
 	./scripts/local-k8s.sh
