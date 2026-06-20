@@ -1,0 +1,46 @@
+# GKE Ingress creates a Google Cloud HTTP(S) Load Balancer automatically.
+# Requires an Ingress controller — GKE provides one when you create an Ingress resource.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kubelab-ingress
+  namespace: kubelab
+  annotations:
+    # Use GKE's managed Ingress (creates a Global External Application Load Balancer)
+    kubernetes.io/ingress.class: "gce"
+    # Allow HTTP during development; enable HTTPS in production (see docs/05-networking.md)
+    kubernetes.io/ingress.allow-http: "true"
+    # Backend config for health checks and timeouts (optional, see backendconfig.yaml)
+    cloud.google.com/backend-config: '{"default": "kubelab-backend-config"}'
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port:
+                  number: 8080
+          - path: /health
+            pathType: Exact
+            backend:
+              service:
+                name: api
+                port:
+                  number: 8080
+          - path: /ready
+            pathType: Exact
+            backend:
+              service:
+                name: api
+                port:
+                  number: 8080
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80

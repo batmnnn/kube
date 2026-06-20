@@ -1,0 +1,55 @@
+# Cloud Build — builds and pushes all KubeLab images to Artifact Registry.
+# Run from repo root in Cloud Shell:
+#   gcloud builds submit . --config=cloudbuild.yaml
+#
+substitutions:
+  _REGION: us-central1
+  _TAG: latest
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    id: build-api
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/kubelab/api:${_TAG}
+      - app/api
+
+  - name: gcr.io/cloud-builders/docker
+    id: build-worker
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/kubelab/worker:${_TAG}
+      - app/worker
+
+  - name: gcr.io/cloud-builders/docker
+    id: build-frontend
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/kubelab/frontend:${_TAG}
+      - app/frontend
+
+  - name: gcr.io/cloud-builders/docker
+    id: push-api
+    args: [push, ${_REGION}-docker.pkg.dev/${PROJECT_ID}/kubelab/api:${_TAG}]
+    waitFor: [build-api]
+
+  - name: gcr.io/cloud-builders/docker
+    id: push-worker
+    args: [push, ${_REGION}-docker.pkg.dev/${PROJECT_ID}/kubelab/worker:${_TAG}]
+    waitFor: [build-worker]
+
+  - name: gcr.io/cloud-builders/docker
+    id: push-frontend
+    args: [push, ${_REGION}-docker.pkg.dev/${PROJECT_ID}/kubelab/frontend:${_TAG}]
+    waitFor: [build-frontend]
+
+images:
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/kubelab/api:${_TAG}
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/kubelab/worker:${_TAG}
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/kubelab/frontend:${_TAG}
+
+options:
+  logging: CLOUD_LOGGING_ONLY

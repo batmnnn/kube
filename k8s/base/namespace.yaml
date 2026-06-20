@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubelab
+  labels:
+    app.kubernetes.io/name: kubelab
+    app.kubernetes.io/part-of: kubelab
+    # Pod Security Standards — enforce baseline in this namespace
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted

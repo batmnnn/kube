@@ -1,0 +1,18 @@
+# ConfigMaps store non-sensitive configuration as key-value pairs.
+# Mounted as env vars or files — changes require pod restart (unless using reloader).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubelab-config
+  namespace: kubelab
+  labels:
+    app.kubernetes.io/name: kubelab
+data:
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_NAME: kubelab
+  DB_USER: kubelab
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  LOG_LEVEL: info
+  APP_ENV: production

@@ -1,0 +1,12 @@
+# PodDisruptionBudget ensures minimum availability during voluntary disruptions
+# (node drains, cluster upgrades, rolling updates).
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-pdb
+  namespace: kubelab
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: api

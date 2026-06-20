@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+vendor/
+
+# Build artifacts
+app/api/kubelab-api
+app/worker/kubelab-worker
+app/frontend/dist/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Terraform
+infra/terraform/.terraform/
+infra/terraform/*.tfstate
+infra/terraform/*.tfstate.*
+infra/terraform/.terraform.lock.hcl
+infra/terraform/terraform.tfvars
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
+
+# Secrets (never commit)
+**/secrets/*.yaml
+!**/secrets/*.example.yaml

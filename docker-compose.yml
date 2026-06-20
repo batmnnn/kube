@@ -1,0 +1,71 @@
+# Local development stack — mirrors the K8s architecture without a cluster.
+# Run: docker compose up --build
+# Then open http://localhost:3001
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: kubelab
+      POSTGRES_PASSWORD: kubelab
+      POSTGRES_DB: kubelab
+    # No host port — avoids conflict with local Postgres on :5432
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kubelab"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    # No host port — avoids conflict with local Redis on :6379
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build: ./app/api
+    # Exposed only inside compose network; frontend proxies /api
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: kubelab
+      DB_PASSWORD: kubelab
+      DB_NAME: kubelab
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: ./app/worker
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: kubelab
+      DB_PASSWORD: kubelab
+      DB_NAME: kubelab
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build: ./app/frontend
+    ports:
+      - "3001:80"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:

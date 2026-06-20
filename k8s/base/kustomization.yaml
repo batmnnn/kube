@@ -1,0 +1,43 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: kubelab
+
+labels:
+  - pairs:
+      app.kubernetes.io/managed-by: kustomize
+      app.kubernetes.io/part-of: kubelab
+
+resources:
+  - namespace.yaml
+  - config/configmap.yaml
+  - config/secret.yaml
+  - rbac/serviceaccounts.yaml
+  - rbac/role.yaml
+  - postgres/statefulset.yaml
+  - postgres/service.yaml
+  - redis/deployment.yaml
+  - redis/service.yaml
+  - api/deployment.yaml
+  - api/service.yaml
+  - api/pdb.yaml
+  - api/hpa.yaml
+  - worker/deployment.yaml
+  - frontend/deployment.yaml
+  - frontend/service.yaml
+  - ingress/ingress.yaml
+  - ingress/backendconfig.yaml
+  - network-policies/policies.yaml
+  - jobs/seed-job.yaml
+  - jobs/cronjob.yaml
+
+images:
+  - name: kubelab-api
+    newName: kubelab-api
+    newTag: latest
+  - name: kubelab-worker
+    newName: kubelab-worker
+    newTag: latest
+  - name: kubelab-frontend
+    newName: kubelab-frontend
+    newTag: latest

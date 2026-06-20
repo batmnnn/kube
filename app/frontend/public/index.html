@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KubeLab — GKE Learning App</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span class="logo">⎈</span>
+      <div>
+        <h1>KubeLab</h1>
+        <p class="subtitle">Order processing demo for Kubernetes on GKE</p>
+      </div>
+    </div>
+    <div id="cluster-info" class="badge">connecting…</div>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>Create Order</h2>
+      <form id="order-form">
+        <label>
+          Product
+          <input type="text" id="product" placeholder="e.g. Kubernetes Course" required />
+        </label>
+        <label>
+          Quantity
+          <input type="number" id="quantity" min="1" value="1" required />
+        </label>
+        <button type="submit">Submit Order</button>
+      </form>
+      <p id="form-message" class="message" hidden></p>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Orders</h2>
+        <button id="refresh" type="button" class="secondary">Refresh</button>
+      </div>
+      <div id="orders" class="orders-list">
+        <p class="muted">Loading orders…</p>
+      </div>
+    </section>
+
+    <section class="panel concepts">
+      <h2>Kubernetes Concepts in This App</h2>
+      <div class="grid">
+        <div class="card"><strong>Deployment</strong><span>API, Frontend, Worker, Redis</span></div>
+        <div class="card"><strong>StatefulSet</strong><span>PostgreSQL with PVC</span></div>
+        <div class="card"><strong>Service</strong><span>ClusterIP internal routing</span></div>
+        <div class="card"><strong>Ingress</strong><span>GKE HTTP(S) Load Balancer</span></div>
+        <div class="card"><strong>ConfigMap</strong><span>Non-sensitive env config</span></div>
+        <div class="card"><strong>Secret</strong><span>DB credentials</span></div>
+        <div class="card"><strong>HPA</strong><span>Auto-scale API pods</span></div>
+        <div class="card"><strong>NetworkPolicy</strong><span>Pod-to-pod firewall</span></div>
+        <div class="card"><strong>CronJob</strong><span>Scheduled cleanup task</span></div>
+        <div class="card"><strong>Job</strong><span>One-time DB seed</span></div>
+        <div class="card"><strong>RBAC</strong><span>Least-privilege access</span></div>
+        <div class="card"><strong>PDB</strong><span>Disruption budget during upgrades</span></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
