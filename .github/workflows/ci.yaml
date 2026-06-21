@@ -118,24 +118,14 @@ jobs:
 
           REGISTRY="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/kubelab"
           for img in api worker frontend; do
-            docker build -t "${REGISTRY}/${img}:${IMAGE_TAG}" "app/${img}"
-            docker push "${REGISTRY}/${img}:${IMAGE_TAG}"
-          done
-
-      - name: Tag images as latest (main branch only)
-        if: github.ref == 'refs/heads/main'
-        env:
-          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-          GCP_REGION: ${{ env.REGION }}
-          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
-        run: |
-          GCP_PROJECT_ID="$(printf '%s' "$GCP_PROJECT_ID" | tr -d '[:space:]')"
-          REGISTRY="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/kubelab"
-          for img in api worker frontend; do
-            gcloud artifacts docker tags add \
-              "${REGISTRY}/${img}:${IMAGE_TAG}" \
-              "${REGISTRY}/${img}:latest" \
-              --project="${GCP_PROJECT_ID}"
+            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+              docker build -t "${REGISTRY}/${img}:${IMAGE_TAG}" -t "${REGISTRY}/${img}:latest" "app/${img}"
+              docker push "${REGISTRY}/${img}:${IMAGE_TAG}"
+              docker push "${REGISTRY}/${img}:latest"
+            else
+              docker build -t "${REGISTRY}/${img}:${IMAGE_TAG}" "app/${img}"
+              docker push "${REGISTRY}/${img}:${IMAGE_TAG}"
+            fi
           done
 
   deploy:
