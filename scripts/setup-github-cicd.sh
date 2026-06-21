@@ -106,7 +106,7 @@ echo ""
 echo "==> Granting CI service account permissions"
 for role in \
   roles/artifactregistry.writer \
-  roles/container.developer \
+  roles/container.admin \
   roles/cloudbuild.builds.editor \
   roles/storage.admin \
   roles/serviceusage.serviceUsageConsumer; do

@@ -126,6 +126,7 @@ Watch runs at: https://github.com/batmnnn/kube/actions
 | Failure | Fix |
 |---------|-----|
 | `Permission denied` on WIF auth | Re-run `./scripts/setup-github-cicd.sh`; verify GitHub secrets |
+| `cannot patch resource "roles"` in deploy | Re-run `./scripts/setup-github-cicd.sh` (grants `container.admin` to CI SA) |
 | `Invalid bucket name ..._cloudbuild` | `GCP_PROJECT_ID` secret must be project ID only (e.g. `learning-deplo`); re-run setup script to create staging bucket |
 | `forbidden from accessing the bucket` | CI builds with Docker (no GCS bucket). For Cloud Shell, re-run `./scripts/setup-github-cicd.sh` |
 | Cloud Build push fails | Ensure Cloud Build SA has `artifactregistry.writer` (cloud-shell-setup.sh) |
