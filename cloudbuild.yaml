@@ -33,17 +33,23 @@ steps:
 
   - name: gcr.io/cloud-builders/docker
     id: push-api
-    args: [push, ${_REGION}-docker.pkg.dev/${PROJECT_ID}/kubelab/api:${_TAG}]
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/kubelab/api:${_TAG}
     waitFor: [build-api]
 
   - name: gcr.io/cloud-builders/docker
     id: push-worker
-    args: [push, ${_REGION}-docker.pkg.dev/${PROJECT_ID}/kubelab/worker:${_TAG}]
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/kubelab/worker:${_TAG}
     waitFor: [build-worker]
 
   - name: gcr.io/cloud-builders/docker
     id: push-frontend
-    args: [push, ${_REGION}-docker.pkg.dev/${PROJECT_ID}/kubelab/frontend:${_TAG}]
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/kubelab/frontend:${_TAG}
     waitFor: [build-frontend]
 
 images:
