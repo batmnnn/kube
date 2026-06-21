@@ -42,6 +42,18 @@ else
 fi
 
 echo ""
+echo "==> Creating Cloud Build staging bucket (if missing)"
+CB_BUCKET="${PROJECT_ID}_cloudbuild"
+if gcloud storage buckets describe "gs://${CB_BUCKET}" --project="$PROJECT_ID" &>/dev/null; then
+  echo "    Already exists — skipping"
+else
+  gcloud storage buckets create "gs://${CB_BUCKET}" \
+    --location="$REGION" \
+    --uniform-bucket-level-access \
+    --project="$PROJECT_ID"
+fi
+
+echo ""
 echo "==> Granting Cloud Build permission to push images"
 PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
 CB_SA="${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com"

@@ -24,7 +24,9 @@ cd "$ROOT_DIR"
 gcloud builds submit . \
   --config=cloudbuild.yaml \
   --substitutions="_REGION=${REGION},_TAG=${TAG}" \
-  --project="$PROJECT_ID"
+  --project="$PROJECT_ID" \
+  --region="$REGION" \
+  --default-buckets-behavior=regional-user-owned-bucket
 
 echo ""
 echo "Images pushed:"

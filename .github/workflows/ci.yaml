@@ -97,6 +97,7 @@ jobs:
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
 
       - uses: google-github-actions/setup-gcloud@v2
 
@@ -106,10 +107,18 @@ jobs:
           GCP_REGION: ${{ env.REGION }}
           IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
         run: |
+          GCP_PROJECT_ID="$(printf '%s' "$GCP_PROJECT_ID" | tr -d '[:space:]')"
+          if ! [[ "$GCP_PROJECT_ID" =~ ^[a-z][a-z0-9-]{4,28}[a-z0-9]$ ]]; then
+            echo "::error::GCP_PROJECT_ID secret is invalid. Use your GCP project ID (e.g. learning-deplo), not the project number or WIF provider path."
+            exit 1
+          fi
+
           gcloud builds submit . \
             --config=cloudbuild.yaml \
             --substitutions="_REGION=${GCP_REGION},_TAG=${IMAGE_TAG}" \
-            --project="${GCP_PROJECT_ID}"
+            --project="${GCP_PROJECT_ID}" \
+            --region="${GCP_REGION}" \
+            --default-buckets-behavior=regional-user-owned-bucket
 
       - name: Tag images as latest (main branch only)
         if: github.ref == 'refs/heads/main'
@@ -118,6 +127,7 @@ jobs:
           GCP_REGION: ${{ env.REGION }}
           IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
         run: |
+          GCP_PROJECT_ID="$(printf '%s' "$GCP_PROJECT_ID" | tr -d '[:space:]')"
           REGISTRY="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/kubelab"
           for img in api worker frontend; do
             gcloud artifacts docker tags add \

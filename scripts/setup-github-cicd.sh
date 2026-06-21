@@ -81,11 +81,26 @@ else
 fi
 
 echo ""
+echo "==> Creating Cloud Build staging bucket (if missing)"
+CB_BUCKET="${PROJECT_ID}_cloudbuild"
+if gcloud storage buckets describe "gs://${CB_BUCKET}" --project="$PROJECT_ID" &>/dev/null; then
+  echo "    Bucket exists — skipping"
+else
+  gcloud storage buckets create "gs://${CB_BUCKET}" \
+    --location="$REGION" \
+    --uniform-bucket-level-access \
+    --project="$PROJECT_ID"
+  echo "    Created gs://${CB_BUCKET}"
+fi
+
+echo ""
 echo "==> Granting CI service account permissions"
 for role in \
   roles/artifactregistry.writer \
   roles/container.developer \
-  roles/cloudbuild.builds.editor; do
+  roles/cloudbuild.builds.editor \
+  roles/storage.objectAdmin \
+  roles/serviceusage.serviceUsageConsumer; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="serviceAccount:${SA_EMAIL}" \
     --role="$role" \
