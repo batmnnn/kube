@@ -118,7 +118,7 @@ jobs:
             --substitutions="_REGION=${GCP_REGION},_TAG=${IMAGE_TAG}" \
             --project="${GCP_PROJECT_ID}" \
             --region="${GCP_REGION}" \
-            --default-buckets-behavior=regional-user-owned-bucket
+            --gcs-source-staging-dir="gs://${GCP_PROJECT_ID}_cloudbuild/source"
 
       - name: Tag images as latest (main branch only)
         if: github.ref == 'refs/heads/main'

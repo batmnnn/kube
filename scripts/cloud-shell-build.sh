@@ -26,7 +26,7 @@ gcloud builds submit . \
   --substitutions="_REGION=${REGION},_TAG=${TAG}" \
   --project="$PROJECT_ID" \
   --region="$REGION" \
-  --default-buckets-behavior=regional-user-owned-bucket
+  --gcs-source-staging-dir="gs://${PROJECT_ID}_cloudbuild/source"
 
 echo ""
 echo "Images pushed:"

@@ -125,6 +125,7 @@ Watch runs at: https://github.com/batmnnn/kube/actions
 |---------|-----|
 | `Permission denied` on WIF auth | Re-run `./scripts/setup-github-cicd.sh`; verify GitHub secrets |
 | `Invalid bucket name ..._cloudbuild` | `GCP_PROJECT_ID` secret must be project ID only (e.g. `learning-deplo`); re-run setup script to create staging bucket |
+| `forbidden from accessing the bucket` | Re-run `./scripts/setup-github-cicd.sh` (grants storage + creates `{project}_cloudbuild` bucket) |
 | Cloud Build push fails | Ensure Cloud Build SA has `artifactregistry.writer` (cloud-shell-setup.sh) |
 | Deploy `ImagePullBackOff` | Check `IMAGE_TAG` in overlay matches built SHA |
 | Rollout timeout | Cluster CPU full — gke-dev uses 1 replica; delete Pending pods |
