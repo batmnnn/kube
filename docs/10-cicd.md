@@ -131,7 +131,7 @@ Watch runs at: https://github.com/batmnnn/kube/actions
 | `forbidden from accessing the bucket` | CI builds with Docker (no GCS bucket). For Cloud Shell, re-run `./scripts/setup-github-cicd.sh` |
 | Cloud Build push fails | Ensure Cloud Build SA has `artifactregistry.writer` (cloud-shell-setup.sh) |
 | Deploy `ImagePullBackOff` | Check `IMAGE_TAG` in overlay matches built SHA |
-| Rollout timeout | Cluster CPU full — gke-dev uses 1 replica; delete Pending pods |
+| Rollout timeout | gke-dev uses fast rollouts (maxUnavailable=1, 10s drain); check Pending pods with `kubectl get pods -n kubelab` |
 | Ingress no IP | NEG + BackendConfig are in manifests now; wait 5–15 min after first deploy |
 
 ## GitOps Alternative

@@ -22,6 +22,15 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/imagePullPolicy
         value: Always
+      - op: replace
+        path: /spec/strategy/rollingUpdate/maxUnavailable
+        value: 1
+      - op: replace
+        path: /spec/strategy/rollingUpdate/maxSurge
+        value: 0
+      - op: replace
+        path: /spec/template/spec/terminationGracePeriodSeconds
+        value: 15
   - target:
       kind: Deployment
       name: frontend
@@ -29,6 +38,36 @@ patches:
       - op: replace
         path: /spec/replicas
         value: 1
+      - op: replace
+        path: /spec/strategy/rollingUpdate/maxUnavailable
+        value: 1
+      - op: replace
+        path: /spec/strategy/rollingUpdate/maxSurge
+        value: 0
+      - op: replace
+        path: /spec/template/spec/terminationGracePeriodSeconds
+        value: 15
+  - target:
+      kind: PodDisruptionBudget
+      name: api-pdb
+    patch: |
+      - op: replace
+        path: /spec/minAvailable
+        value: 0
+  - target:
+      kind: BackendConfig
+      name: kubelab-backend-config
+    patch: |
+      - op: replace
+        path: /spec/connectionDraining/drainingTimeoutSec
+        value: 10
+  - target:
+      kind: BackendConfig
+      name: kubelab-frontend-backend-config
+    patch: |
+      - op: replace
+        path: /spec/connectionDraining/drainingTimeoutSec
+        value: 10
   - target:
       kind: HorizontalPodAutoscaler
       name: api-hpa

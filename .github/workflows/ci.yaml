@@ -167,9 +167,23 @@ jobs:
 
       - name: Verify rollouts
         run: |
-          kubectl rollout status deployment/api -n kubelab --timeout=180s
-          kubectl rollout status deployment/worker -n kubelab --timeout=180s
-          kubectl rollout status deployment/frontend -n kubelab --timeout=180s
+          set -euo pipefail
+          wait_rollout() {
+            local dep=$1
+            echo "Waiting for deployment/${dep}..."
+            if kubectl rollout status "deployment/${dep}" -n kubelab --timeout=300s; then
+              return 0
+            fi
+            echo "::group::${dep} rollout diagnostics"
+            kubectl get deployment "${dep}" -n kubelab
+            kubectl get pods -n kubelab -l "app.kubernetes.io/name=${dep}" -o wide
+            kubectl describe pods -n kubelab -l "app.kubernetes.io/name=${dep}" || true
+            echo "::endgroup::"
+            return 1
+          }
+          wait_rollout api
+          wait_rollout worker
+          wait_rollout frontend
           kubectl get pods,ingress -n kubelab
 
       - name: Smoke test (in-cluster)
