@@ -43,7 +43,7 @@ This creates:
 
 ## GitHub Secrets
 
-In https://github.com/batmnnn/kube → **Settings → Secrets and variables → Actions**:
+In https://github.com/batmnnn/kube → **Settings → Secrets and variables → Actions** → **New repository secret**:
 
 | Secret | Example value |
 |--------|---------------|
@@ -53,6 +53,12 @@ In https://github.com/batmnnn/kube → **Settings → Secrets and variables → 
 | `WIF_SERVICE_ACCOUNT` | `github-ci@learning-deplo.iam.gserviceaccount.com` |
 
 The setup script prints the exact `WIF_PROVIDER` value for your project.
+
+**All four secrets are required** for build/deploy. Without them, CI still runs the **Test** job but skips build/deploy with a warning (instead of failing on auth).
+
+### Common error: `must specify exactly one of workload_identity_provider or credentials_json`
+
+This means `WIF_PROVIDER` and/or `WIF_SERVICE_ACCOUNT` secrets are **missing or empty** in GitHub. Add all four secrets above, then re-run the workflow.
 
 ## What Each Job Does
 
