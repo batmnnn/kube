@@ -161,7 +161,9 @@ jobs:
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
           GCP_REGION: ${{ env.REGION }}
           IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
-        run: ./scripts/deploy.sh ${{ env.OVERLAY }}
+        run: |
+          export GCP_PROJECT_ID="$(printf '%s' "$GCP_PROJECT_ID" | tr -d '[:space:]')"
+          ./scripts/deploy.sh ${{ env.OVERLAY }}
 
       - name: Verify rollouts
         run: |

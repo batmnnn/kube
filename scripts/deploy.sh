@@ -10,6 +10,10 @@ PROJECT_ID="${GCP_PROJECT_ID:-$(gcloud config get-value project 2>/dev/null)}"
 REGION="${GCP_REGION:-us-central1}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 
+PROJECT_ID="$(printf '%s' "$PROJECT_ID" | tr -d '[:space:]')"
+REGION="$(printf '%s' "$REGION" | tr -d '[:space:]')"
+IMAGE_TAG="$(printf '%s' "$IMAGE_TAG" | tr -d '[:space:]')"
+
 if [[ -z "$PROJECT_ID" || "$PROJECT_ID" == "(unset)" ]]; then
   echo "Error: Set GCP_PROJECT_ID or configure gcloud project"
   exit 1
@@ -35,9 +39,9 @@ else
 fi
 
 "${KUSTOMIZE[@]}" "$OVERLAY_DIR" \
-  | sed "s/PROJECT_ID/${PROJECT_ID}/g" \
-  | sed "s/REGION/${REGION}/g" \
-  | sed "s/IMAGE_TAG/${IMAGE_TAG}/g" \
+  | sed "s|PROJECT_ID|${PROJECT_ID}|g" \
+  | sed "s|REGION|${REGION}|g" \
+  | sed "s|IMAGE_TAG|${IMAGE_TAG}|g" \
   > "$TMP_DIR/manifests.yaml"
 
 echo "--- Preview (first 30 lines)"
