@@ -37,6 +37,7 @@ gcloud services enable \
   iamcredentials.googleapis.com \
   cloudresourcemanager.googleapis.com \
   sts.googleapis.com \
+  storage.googleapis.com \
   artifactregistry.googleapis.com \
   container.googleapis.com \
   cloudbuild.googleapis.com \
@@ -94,12 +95,20 @@ else
 fi
 
 echo ""
+echo "==> Granting CI service account bucket access"
+gcloud storage buckets add-iam-policy-binding "gs://${CB_BUCKET}" \
+  --member="serviceAccount:${SA_EMAIL}" \
+  --role="roles/storage.objectAdmin" \
+  --project="$PROJECT_ID" \
+  --quiet
+
+echo ""
 echo "==> Granting CI service account permissions"
 for role in \
   roles/artifactregistry.writer \
   roles/container.developer \
   roles/cloudbuild.builds.editor \
-  roles/storage.objectAdmin \
+  roles/storage.admin \
   roles/serviceusage.serviceUsageConsumer; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="serviceAccount:${SA_EMAIL}" \

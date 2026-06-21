@@ -101,7 +101,10 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
-      - name: Build and push with Cloud Build
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker "${{ env.REGION }}-docker.pkg.dev" --quiet
+
+      - name: Build and push images
         env:
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
           GCP_REGION: ${{ env.REGION }}
@@ -113,12 +116,11 @@ jobs:
             exit 1
           fi
 
-          gcloud builds submit . \
-            --config=cloudbuild.yaml \
-            --substitutions="_REGION=${GCP_REGION},_TAG=${IMAGE_TAG}" \
-            --project="${GCP_PROJECT_ID}" \
-            --region="${GCP_REGION}" \
-            --gcs-source-staging-dir="gs://${GCP_PROJECT_ID}_cloudbuild/source"
+          REGISTRY="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/kubelab"
+          for img in api worker frontend; do
+            docker build -t "${REGISTRY}/${img}:${IMAGE_TAG}" "app/${img}"
+            docker push "${REGISTRY}/${img}:${IMAGE_TAG}"
+          done
 
       - name: Tag images as latest (main branch only)
         if: github.ref == 'refs/heads/main'

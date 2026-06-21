@@ -70,9 +70,11 @@ This means `WIF_PROVIDER` and/or `WIF_SERVICE_ACCOUNT` secrets are **missing or 
 ### 2. Build & Push (not on PRs)
 
 - Authenticate to GCP via Workload Identity Federation (no JSON keys)
-- Run `gcloud builds submit` using `cloudbuild.yaml`
+- Build Docker images on the GitHub runner and push to Artifact Registry
 - Tag images with git commit SHA: `us-central1-docker.pkg.dev/PROJECT/kubelab/{api,worker,frontend}:SHA`
 - Also tags `:latest` on `main` branch
+
+Cloud Shell builds still use `gcloud builds submit` via `cloudbuild.yaml`.
 
 ### 3. Deploy (main branch pushes only)
 
@@ -125,7 +127,7 @@ Watch runs at: https://github.com/batmnnn/kube/actions
 |---------|-----|
 | `Permission denied` on WIF auth | Re-run `./scripts/setup-github-cicd.sh`; verify GitHub secrets |
 | `Invalid bucket name ..._cloudbuild` | `GCP_PROJECT_ID` secret must be project ID only (e.g. `learning-deplo`); re-run setup script to create staging bucket |
-| `forbidden from accessing the bucket` | Re-run `./scripts/setup-github-cicd.sh` (grants storage + creates `{project}_cloudbuild` bucket) |
+| `forbidden from accessing the bucket` | CI builds with Docker (no GCS bucket). For Cloud Shell, re-run `./scripts/setup-github-cicd.sh` |
 | Cloud Build push fails | Ensure Cloud Build SA has `artifactregistry.writer` (cloud-shell-setup.sh) |
 | Deploy `ImagePullBackOff` | Check `IMAGE_TAG` in overlay matches built SHA |
 | Rollout timeout | Cluster CPU full — gke-dev uses 1 replica; delete Pending pods |
