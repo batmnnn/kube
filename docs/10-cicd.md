@@ -21,13 +21,15 @@ See `.github/workflows/ci.yaml`.
 
 ## One-Time GCP Setup (Cloud Shell)
 
-Run once for project `learning-deplo` and repo `batmnnn/kube`:
+Run once for your GCP project and repo `batmnnn/kube`:
 
 ```bash
 cd ~/kube
 chmod +x scripts/setup-github-cicd.sh
 
-export GCP_PROJECT_ID=learning-deplo
+export GCP_PROJECT_ID=project-891d53eb-9710-4d69-954
+export GKE_CLUSTER_NAME=kubelab-v2
+export GKE_LOCATION=us-central1-a    # zone for zonal cluster (required for get-gke-credentials)
 export GITHUB_REPO=batmnnn/kube
 
 ./scripts/setup-github-cicd.sh
@@ -47,14 +49,15 @@ In https://github.com/batmnnn/kube → **Settings → Secrets and variables → 
 
 | Secret | Example value |
 |--------|---------------|
-| `GCP_PROJECT_ID` | `learning-deplo` (project **ID**, not number — no spaces/newlines) |
-| `GKE_CLUSTER` | `kubelab-cluster` |
-| `WIF_PROVIDER` | `projects/663804652181/locations/global/workloadIdentityPools/github-pool/providers/github-provider` |
-| `WIF_SERVICE_ACCOUNT` | `github-ci@learning-deplo.iam.gserviceaccount.com` |
+| `GCP_PROJECT_ID` | `project-891d53eb-9710-4d69-954` (project **ID**, not number) |
+| `GKE_CLUSTER` | `kubelab-v2` |
+| `GKE_LOCATION` | `us-central1-a` (zone for zonal cluster; use region e.g. `us-central1` for regional) |
+| `WIF_PROVIDER` | `projects/396615866544/locations/global/workloadIdentityPools/github-pool/providers/github-provider` |
+| `WIF_SERVICE_ACCOUNT` | `github-ci@project-891d53eb-9710-4d69-954.iam.gserviceaccount.com` |
 
 The setup script prints the exact `WIF_PROVIDER` value for your project.
 
-**All four secrets are required** for build/deploy. Without them, CI still runs the **Test** job but skips build/deploy with a warning (instead of failing on auth).
+**All five secrets are required** for build/deploy. Without them, CI still runs the **Test** job but skips build/deploy with a warning (instead of failing on auth).
 
 ### Common error: `must specify exactly one of workload_identity_provider or credentials_json`
 
@@ -78,7 +81,7 @@ Cloud Shell builds still use `gcloud builds submit` via `cloudbuild.yaml`.
 
 ### 3. Deploy (main branch pushes only)
 
-- `get-gke-credentials` for `kubelab-cluster`
+- `get-gke-credentials` for cluster + **location** (`GKE_LOCATION` secret — zone or region)
 - `./scripts/deploy.sh gke-dev` with `IMAGE_TAG=$GITHUB_SHA`
 - Waits for rollouts and runs an in-cluster smoke test
 
@@ -131,7 +134,8 @@ Watch runs at: https://github.com/batmnnn/kube/actions
 | `forbidden from accessing the bucket` | CI builds with Docker (no GCS bucket). For Cloud Shell, re-run `./scripts/setup-github-cicd.sh` |
 | Cloud Build push fails | Ensure Cloud Build SA has `artifactregistry.writer` (cloud-shell-setup.sh) |
 | Deploy `ImagePullBackOff` | Check `IMAGE_TAG` in overlay matches built SHA |
-| Rollout timeout | gke-dev uses fast rollouts (maxUnavailable=1, 10s drain); check Pending pods with `kubectl get pods -n kubelab` |
+| Rollout timeout | gke-dev uses 10m CPU requests + maxUnavailable=1; check Pending pods with `kubectl get pods -n kubelab` |
+| `get-gke-credentials` not found | Set `GKE_LOCATION` to the cluster **zone** (`us-central1-a`) not just the region |
 | Ingress no IP | NEG + BackendConfig are in manifests now; wait 5–15 min after first deploy |
 
 ## GitOps Alternative

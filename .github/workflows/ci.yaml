@@ -27,8 +27,8 @@ jobs:
           go-version: "1.22"
           cache: true
 
-      - name: Compile API
-        run: cd app/api && go mod tidy && go build -o /dev/null .
+      - name: Test & compile API
+        run: cd app/api && go mod tidy && go test ./... && go build -o /dev/null .
 
       - name: Compile Worker
         run: cd app/worker && go mod tidy && go build -o /dev/null .
@@ -60,12 +60,14 @@ jobs:
           WIF_SERVICE_ACCOUNT: ${{ secrets.WIF_SERVICE_ACCOUNT }}
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
           GKE_CLUSTER: ${{ secrets.GKE_CLUSTER }}
+          GKE_LOCATION: ${{ secrets.GKE_LOCATION }}
         run: |
           missing=""
           [ -z "$WIF_PROVIDER" ] && missing="${missing} WIF_PROVIDER"
           [ -z "$WIF_SERVICE_ACCOUNT" ] && missing="${missing} WIF_SERVICE_ACCOUNT"
           [ -z "$GCP_PROJECT_ID" ] && missing="${missing} GCP_PROJECT_ID"
           [ -z "$GKE_CLUSTER" ] && missing="${missing} GKE_CLUSTER"
+          [ -z "$GKE_LOCATION" ] && missing="${missing} GKE_LOCATION"
 
           if [ -n "$missing" ]; then
             echo "ready=false" >> "$GITHUB_OUTPUT"
@@ -153,7 +155,7 @@ jobs:
       - uses: google-github-actions/get-gke-credentials@v2
         with:
           cluster_name: ${{ secrets.GKE_CLUSTER }}
-          location: ${{ env.REGION }}
+          location: ${{ secrets.GKE_LOCATION }}
           project_id: ${{ secrets.GCP_PROJECT_ID }}
 
       - name: Deploy manifests
@@ -193,4 +195,4 @@ jobs:
             --image=curlimages/curl:8.5.0 \
             -n kubelab \
             --command -- \
-            sh -c 'curl -sf http://api:8080/health && curl -sf http://frontend/ | head -1'
+            sh -c 'curl -sf http://api:8080/ready && curl -sf http://frontend/ | grep -q WordRush'
