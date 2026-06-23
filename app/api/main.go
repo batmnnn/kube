@@ -10,39 +10,44 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/lib/pq"
+	_ "github.com/lib/pq"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
 )
 
-type Order struct {
-	ID        int       `json:"id"`
-	Product   string    `json:"product"`
-	Quantity  int       `json:"quantity"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+type WordScore struct {
+	ID                   int       `json:"id"`
+	Word                 string    `json:"word"`
+	Score                int       `json:"score"`
+	Length               int       `json:"length"`
+	LengthPoints         int       `json:"length_points"`
+	UniquenessPoints     int       `json:"uniqueness_points"`
+	CorpusFrequency      int64     `json:"corpus_frequency,omitempty"`
+	RarityTier           string    `json:"rarity_tier,omitempty"`
+	PlayerName           string    `json:"player_name"`
+	CreatedAt            time.Time `json:"created_at"`
 }
 
-type createOrderRequest struct {
-	Product  string `json:"product"`
-	Quantity int    `json:"quantity"`
+type submitScoreRequest struct {
+	Word       string `json:"word"`
+	PlayerName string `json:"player_name"`
 }
 
 var (
-	ordersCreated = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "kubelab_orders_created_total",
-		Help: "Total number of orders created",
+	scoresSubmitted = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "kubelab_word_scores_submitted_total",
+		Help: "Total word scores submitted",
 	})
-	ordersProcessed = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "kubelab_orders_processed_total",
-		Help: "Total number of orders processed by worker",
+	scoresIndexed = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "kubelab_word_scores_indexed_total",
+		Help: "Total word scores indexed by worker",
 	})
 	httpRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "kubelab_http_requests_total",
@@ -51,7 +56,7 @@ var (
 )
 
 func init() {
-	prometheus.MustRegister(ordersCreated, ordersProcessed, httpRequests)
+	prometheus.MustRegister(scoresSubmitted, scoresIndexed, httpRequests)
 }
 
 func main() {
@@ -103,10 +108,12 @@ func main() {
 	r.Handle("/metrics", promhttp.Handler())
 
 	r.Route("/api", func(r chi.Router) {
-		r.Get("/orders", listOrders(db))
-		r.Post("/orders", createOrder(db, rdb))
-		r.Get("/orders/{id}", getOrder(db))
-		r.Patch("/orders/{id}/status", updateOrderStatus(db))
+		r.Get("/scores", listScores(db))
+		r.Get("/scores/today", listTodayScores(db))
+		r.Get("/stats", getStats(db, rdb))
+		r.Get("/hint", getHint())
+		r.Get("/players/{name}/scores", listPlayerScores(db))
+		r.Post("/scores", submitScore(db, rdb))
 	})
 
 	port := envOr("PORT", "8080")
@@ -183,14 +190,19 @@ func connectRedis() *redis.Client {
 
 func migrate(db *sql.DB) error {
 	_, err := db.Exec(`
-		CREATE TABLE IF NOT EXISTS orders (
+		CREATE TABLE IF NOT EXISTS word_scores (
 			id SERIAL PRIMARY KEY,
-			product TEXT NOT NULL,
-			quantity INTEGER NOT NULL CHECK (quantity > 0),
+			word TEXT NOT NULL,
+			score INTEGER NOT NULL CHECK (score BETWEEN 1 AND 1000),
+			length INTEGER NOT NULL CHECK (length > 0),
+			length_points INTEGER NOT NULL,
+			uniqueness_points INTEGER NOT NULL,
+			player_name TEXT NOT NULL DEFAULT 'Player',
 			status TEXT NOT NULL DEFAULT 'pending',
-			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-		)
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+		CREATE INDEX IF NOT EXISTS idx_word_scores_score ON word_scores (score DESC, created_at DESC);
+		CREATE INDEX IF NOT EXISTS idx_word_scores_word ON word_scores (LOWER(word));
 	`)
 	return err
 }
@@ -203,117 +215,88 @@ func metricsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func listOrders(db *sql.DB) http.HandlerFunc {
+func listScores(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		rows, err := db.Query(`SELECT id, product, quantity, status, created_at, updated_at FROM orders ORDER BY id DESC LIMIT 50`)
+		rows, err := db.Query(`
+			SELECT id, word, score, length, length_points, uniqueness_points, player_name, created_at
+			FROM word_scores
+			ORDER BY score DESC, created_at DESC
+			LIMIT 50
+		`)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		defer rows.Close()
 
-		orders := []Order{}
+		scores := []WordScore{}
 		for rows.Next() {
-			var o Order
-			if err := rows.Scan(&o.ID, &o.Product, &o.Quantity, &o.Status, &o.CreatedAt, &o.UpdatedAt); err != nil {
+			var s WordScore
+			if err := rows.Scan(&s.ID, &s.Word, &s.Score, &s.Length, &s.LengthPoints, &s.UniquenessPoints, &s.PlayerName, &s.CreatedAt); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			orders = append(orders, o)
+			s.Word = displayWord(s.Word)
+			enrichCorpusMeta(&s)
+			scores = append(scores, s)
 		}
-		writeJSON(w, orders)
+		writeJSON(w, scores)
 	}
 }
 
-func createOrder(db *sql.DB, rdb *redis.Client) http.HandlerFunc {
+func submitScore(db *sql.DB, rdb *redis.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req createOrderRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Product == "" || req.Quantity < 1 {
-			http.Error(w, `{"error":"invalid request: product and quantity required"}`, http.StatusBadRequest)
+		var req submitScoreRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, `{"error":"invalid json body"}`, http.StatusBadRequest)
 			return
 		}
 
-		var o Order
-		err := db.QueryRow(
-			`INSERT INTO orders (product, quantity, status) VALUES ($1, $2, 'pending') RETURNING id, product, quantity, status, created_at, updated_at`,
-			req.Product, req.Quantity,
-		).Scan(&o.ID, &o.Product, &o.Quantity, &o.Status, &o.CreatedAt, &o.UpdatedAt)
+		word, err := normalizeWord(req.Word)
 		if err != nil {
-			if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23514" {
-				http.Error(w, `{"error":"quantity must be positive"}`, http.StatusBadRequest)
-				return
-			}
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+			return
+		}
+
+		player := req.PlayerName
+		if player == "" {
+			player = "Player"
+		}
+		if len(player) > 40 {
+			player = player[:40]
+		}
+
+		breakdown := calculateScore(word)
+
+		var s WordScore
+		err = db.QueryRow(
+			`INSERT INTO word_scores (word, score, length, length_points, uniqueness_points, player_name, status)
+			 VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+			 RETURNING id, word, score, length, length_points, uniqueness_points, player_name, created_at`,
+			word, breakdown.Score, breakdown.Length, breakdown.LengthPoints, breakdown.UniquenessPoints, player,
+		).Scan(&s.ID, &s.Word, &s.Score, &s.Length, &s.LengthPoints, &s.UniquenessPoints, &s.PlayerName, &s.CreatedAt)
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		// Push order ID to Redis queue for the worker — demonstrates async processing
-		if err := rdb.LPush(r.Context(), "order_queue", o.ID).Err(); err != nil {
-			slog.Warn("failed to enqueue order", "order_id", o.ID, "error", err)
+		if err := rdb.LPush(r.Context(), "score_queue", s.ID).Err(); err != nil {
+			slog.Warn("failed to enqueue score", "score_id", s.ID, "error", err)
 		}
 
-		ordersCreated.Inc()
+		scoresSubmitted.Inc()
+		s.Word = displayWord(s.Word)
+		s.CorpusFrequency = breakdown.CorpusFrequency
+		s.RarityTier = breakdown.RarityTier
 		w.WriteHeader(http.StatusCreated)
-		writeJSON(w, o)
+		writeJSON(w, s)
 	}
 }
 
-func getOrder(db *sql.DB) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := strconv.Atoi(chi.URLParam(r, "id"))
-		if err != nil {
-			http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
-			return
-		}
-		var o Order
-		err = db.QueryRow(
-			`SELECT id, product, quantity, status, created_at, updated_at FROM orders WHERE id = $1`, id,
-		).Scan(&o.ID, &o.Product, &o.Quantity, &o.Status, &o.CreatedAt, &o.UpdatedAt)
-		if err == sql.ErrNoRows {
-			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
-			return
-		}
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		writeJSON(w, o)
-	}
-}
-
-func updateOrderStatus(db *sql.DB) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := strconv.Atoi(chi.URLParam(r, "id"))
-		if err != nil {
-			http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
-			return
-		}
-		var body struct {
-			Status string `json:"status"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Status == "" {
-			http.Error(w, `{"error":"status required"}`, http.StatusBadRequest)
-			return
-		}
-
-		var o Order
-		err = db.QueryRow(
-			`UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING id, product, quantity, status, created_at, updated_at`,
-			body.Status, id,
-		).Scan(&o.ID, &o.Product, &o.Quantity, &o.Status, &o.CreatedAt, &o.UpdatedAt)
-		if err == sql.ErrNoRows {
-			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
-			return
-		}
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if body.Status == "processed" {
-			ordersProcessed.Inc()
-		}
-		writeJSON(w, o)
-	}
+func enrichCorpusMeta(s *WordScore) {
+	_, freq, tier := corpusRarityPoints(strings.ToLower(s.Word))
+	s.CorpusFrequency = freq
+	s.RarityTier = tier
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

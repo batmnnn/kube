@@ -1,11 +1,12 @@
 # KubeLab — Learn Full GKE Deployment
 
-A hands-on order-processing application designed to teach **every major concept** in deploying to **Google Kubernetes Engine (GKE)**. Not a toy hello-world — a realistic multi-service app with annotated manifests, Terraform infrastructure, and a structured curriculum.
+A hands-on **WordRush** game and GKE learning project — type the biggest unique word in 5 seconds, score 1–1000, deployed on **Google Kubernetes Engine (GKE)** with annotated manifests and CI/CD.
 
 ## What You'll Learn
 
 | Module | Topics |
 |--------|--------|
+| **[00 Code → Production](docs/00-from-code-to-production.md)** | **Master narrative: containers, registry, GKE, networking, CI/CD end-to-end** |
 | [01 Prerequisites](docs/01-prerequisites.md) | gcloud, kubectl, Docker, billing |
 | [02 GKE Cluster](docs/02-gke-cluster.md) | Terraform, node pools, Workload Identity |
 | [03 Container Images](docs/03-container-images.md) | Dockerfiles, multi-stage builds, Artifact Registry |
@@ -16,6 +17,7 @@ A hands-on order-processing application designed to teach **every major concept*
 | [08 Scaling & Resilience](docs/08-scaling-resilience.md) | HPA, PDB, rolling updates |
 | [09 Observability](docs/09-observability.md) | Logs, metrics, health checks |
 | [10 CI/CD](docs/10-cicd.md) | GitHub Actions, Workload Identity Federation |
+| [Errors we hit](docs/deployment-errors-we-hit.md) | Real CI/GKE failures and fixes from this project |
 | [11 Production Checklist](docs/11-production-checklist.md) | HTTPS, backups, cost, security |
 
 ## Architecture
@@ -106,9 +108,9 @@ kubectl get ingress kubelab-ingress -n kubelab -w
 ```
 kube/
 ├── app/
-│   ├── api/           # Go REST API (orders CRUD, health, metrics)
-│   ├── worker/        # Background queue processor
-│   └── frontend/      # Static UI + nginx reverse proxy
+│   ├── api/           # Go REST API (word scoring, health, metrics)
+│   ├── worker/        # Background score indexer (Redis queue)
+│   └── frontend/      # WordRush game UI + nginx
 ├── k8s/
 │   ├── base/          # All Kubernetes manifests
 │   └── overlays/      # Kustomize env-specific configs
@@ -123,6 +125,8 @@ kube/
 ```
 
 ## Learning Path
+
+**Start here:** [docs/00-from-code-to-production.md](docs/00-from-code-to-production.md) — the full deployment story from Dockerfile to Ingress.
 
 Follow the docs in order. Each module includes **exercises** — hands-on commands to run and concepts to verify.
 
@@ -159,7 +163,7 @@ kubectl get cronjobs,jobs -n kubelab
 
 ## Cost Warning
 
-A GKE cluster with 2 `e2-medium` nodes costs roughly **$50-70/month**. Delete when done:
+A GKE cluster with 1 `e2-medium` node costs roughly **$25–35/month**. Delete when done:
 
 ```bash
 cd infra/terraform && terraform destroy

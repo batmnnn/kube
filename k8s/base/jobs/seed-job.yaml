@@ -34,19 +34,17 @@ spec:
             - -c
             - |
               psql -h postgres -U kubelab -d kubelab -c "
-                CREATE TABLE IF NOT EXISTS orders (
+                CREATE TABLE IF NOT EXISTS word_scores (
                   id SERIAL PRIMARY KEY,
-                  product TEXT NOT NULL,
-                  quantity INTEGER NOT NULL CHECK (quantity > 0),
+                  word TEXT NOT NULL,
+                  score INTEGER NOT NULL CHECK (score BETWEEN 1 AND 1000),
+                  length INTEGER NOT NULL CHECK (length > 0),
+                  length_points INTEGER NOT NULL,
+                  uniqueness_points INTEGER NOT NULL,
+                  player_name TEXT NOT NULL DEFAULT 'Player',
                   status TEXT NOT NULL DEFAULT 'pending',
-                  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 );
-                INSERT INTO orders (product, quantity, status)
-                SELECT 'GKE Fundamentals Book', 1, 'processed'
-                WHERE NOT EXISTS (SELECT 1 FROM orders LIMIT 1);
-                INSERT INTO orders (product, quantity, status)
-                SELECT 'Kubernetes Certification', 2, 'pending'
-                WHERE (SELECT COUNT(*) FROM orders) < 2;
+                CREATE INDEX IF NOT EXISTS idx_word_scores_score ON word_scores (score DESC, created_at DESC);
               "
               echo "Seed complete"

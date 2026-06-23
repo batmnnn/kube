@@ -3,64 +3,107 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>KubeLab — GKE Learning App</title>
+  <title>WordRush — 5 Second Challenge</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
+  <div class="glow glow-a"></div>
+  <div class="glow glow-b"></div>
+
   <header>
     <div class="brand">
       <span class="logo">⎈</span>
       <div>
-        <h1>KubeLab</h1>
-        <p class="subtitle">Order processing demo for Kubernetes on GKE</p>
+        <h1>WordRush</h1>
+        <p class="subtitle">Type the biggest unique word you can in 5 seconds</p>
       </div>
     </div>
     <div id="cluster-info" class="badge">connecting…</div>
   </header>
 
   <main>
-    <section class="panel">
-      <h2>Create Order</h2>
-      <form id="order-form">
-        <label>
-          Product
-          <input type="text" id="product" placeholder="e.g. Kubernetes Course" required />
-        </label>
-        <label>
-          Quantity
-          <input type="number" id="quantity" min="1" value="1" required />
-        </label>
-        <button type="submit">Submit Order</button>
-      </form>
-      <p id="form-message" class="message" hidden></p>
+    <section class="panel stats-panel">
+      <h2>Live stats</h2>
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat"><span>Games played</span><strong id="stat-games">—</strong></div>
+        <div class="stat"><span>Average score</span><strong id="stat-avg">—</strong></div>
+        <div class="stat"><span>Top score</span><strong id="stat-top">—</strong></div>
+        <div class="stat"><span>Unique words</span><strong id="stat-words">—</strong></div>
+        <div class="stat"><span>Your best</span><strong id="stat-personal">—</strong></div>
+      </div>
+    </section>
+
+    <section class="panel game-panel">
+      <div class="rules">
+        <span>⏱ 5 seconds</span>
+        <span>🔤 one word only</span>
+        <span>🏆 score 1–1000</span>
+      </div>
+
+      <label class="name-label">
+        Your name
+        <input type="text" id="player-name" maxlength="40" placeholder="Player" />
+      </label>
+
+      <div id="timer" class="timer idle">5.0</div>
+
+      <div class="input-wrap">
+        <input
+          type="text"
+          id="word-input"
+          autocomplete="off"
+          autocapitalize="characters"
+          spellcheck="false"
+          placeholder="Start the clock, then type your word…"
+          disabled
+        />
+        <span id="char-count" class="char-count">0</span>
+      </div>
+
+      <div class="actions">
+        <button id="start-btn" type="button">Start round</button>
+        <button id="hint-btn" type="button" class="secondary">💡 Rare word hint</button>
+        <button id="submit-btn" type="button" class="secondary" disabled>Submit early</button>
+      </div>
+      <p id="hint-line" class="hint-line" hidden></p>
+
+      <p id="status-message" class="status-message" hidden></p>
+
+      <div id="result" class="result" hidden>
+        <div class="score-ring">
+          <span id="final-score">0</span>
+          <small>/ 1000</small>
+        </div>
+        <p class="result-word">You played: <strong id="result-word"></strong></p>
+        <div class="breakdown">
+          <div><span>Length</span><strong id="length-points">0</strong></div>
+          <div><span>Uniqueness</span><strong id="unique-points">0</strong></div>
+          <div><span>English usage</span><strong id="rarity-tier">—</strong></div>
+        </div>
+        <button id="again-btn" type="button">Play again</button>
+      </div>
     </section>
 
     <section class="panel">
       <div class="panel-header">
-        <h2>Orders</h2>
+        <h2>Leaderboard</h2>
+        <div class="tab-row">
+          <button type="button" class="tab active" data-tab="all">All time</button>
+          <button type="button" class="tab" data-tab="today">Today</button>
+        </div>
         <button id="refresh" type="button" class="secondary">Refresh</button>
       </div>
-      <div id="orders" class="orders-list">
-        <p class="muted">Loading orders…</p>
+      <div id="leaderboard" class="leaderboard">
+        <p class="muted">Loading scores…</p>
       </div>
     </section>
 
-    <section class="panel concepts">
-      <h2>Kubernetes Concepts in This App</h2>
-      <div class="grid">
-        <div class="card"><strong>Deployment</strong><span>API, Frontend, Worker, Redis</span></div>
-        <div class="card"><strong>StatefulSet</strong><span>PostgreSQL with PVC</span></div>
-        <div class="card"><strong>Service</strong><span>ClusterIP internal routing</span></div>
-        <div class="card"><strong>Ingress</strong><span>GKE HTTP(S) Load Balancer</span></div>
-        <div class="card"><strong>ConfigMap</strong><span>Non-sensitive env config</span></div>
-        <div class="card"><strong>Secret</strong><span>DB credentials</span></div>
-        <div class="card"><strong>HPA</strong><span>Auto-scale API pods</span></div>
-        <div class="card"><strong>NetworkPolicy</strong><span>Pod-to-pod firewall</span></div>
-        <div class="card"><strong>CronJob</strong><span>Scheduled cleanup task</span></div>
-        <div class="card"><strong>Job</strong><span>One-time DB seed</span></div>
-        <div class="card"><strong>RBAC</strong><span>Least-privilege access</span></div>
-        <div class="card"><strong>PDB</strong><span>Disruption budget during upgrades</span></div>
-      </div>
+    <section class="panel scoring-help">
+      <h2>How scoring works</h2>
+      <p><strong>Dictionary</strong> — only real English words count. Random letters like <code>iashihaoisdcihs</code> are rejected.</p>
+      <p><strong>Length</strong> — longer words earn more (up to 500 pts).</p>
+      <p><strong>Uniqueness</strong> — based on real English usage. Common words like <code>hello</code> score less; rare words like <code>articulate</code> score more.</p>
+      <p class="muted">Tip: obscure long words beat short common ones. <code>antidisestablishmentarianism</code> beats <code>hello</code>.</p>
     </section>
   </main>
 

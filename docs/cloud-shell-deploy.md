@@ -46,7 +46,13 @@ unzip kube.zip && cd kube
 ./scripts/cloud-shell-setup.sh
 ```
 
-Creates Artifact Registry, GKE cluster, configures kubectl.
+Creates Artifact Registry, GKE cluster ( **1 node** by default), configures kubectl.
+
+```bash
+# optional overrides
+export GKE_NODE_COUNT=1
+export GKE_MACHINE_TYPE=e2-medium
+```
 
 ## Step 3 — Build images with Cloud Build (~5 min)
 
@@ -73,7 +79,7 @@ When `ADDRESS` appears, open `http://THAT_IP` in your browser.
 Test:
 
 ```bash
-curl http://INGRESS_IP/api/orders
+curl http://INGRESS_IP/api/scores
 ```
 
 ## Teardown (stop charges)

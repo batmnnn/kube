@@ -89,7 +89,7 @@ The repo manifests now include lessons from manual deploy:
 - **NEG annotations** on `api` and `frontend` Services (required for GKE Ingress + ClusterIP)
 - **Separate BackendConfigs** — API `:8080/health`, frontend `:80/`
 - **Frontend nginx** — writable cache volumes + `NET_BIND_SERVICE`
-- **gke-dev overlay** — 1 replica each, HPA min=1 (fits small trial clusters)
+- **gke-dev overlay** — 1 node / 1 replica each, tight CPU+memory requests, HPA capped at 1
 
 ## Manual Deploy (same as CI)
 

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -15,8 +16,7 @@ import (
 	_ "github.com/lib/pq"
 )
 
-// Worker demonstrates a background Deployment that consumes a Redis queue.
-// In production you'd use a proper message broker; Redis LPOP/BRPOP is fine for learning.
+// Worker indexes submitted scores into Redis for fast leaderboard reads.
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
@@ -39,7 +39,7 @@ func main() {
 		cancel()
 	}()
 
-	slog.Info("worker started", "queue", "order_queue")
+	slog.Info("worker started", "queue", "score_queue")
 	for {
 		select {
 		case <-ctx.Done():
@@ -51,10 +51,9 @@ func main() {
 }
 
 func processNext(ctx context.Context, db *sql.DB, rdb *redis.Client) {
-	// BRPOP blocks until an item arrives — efficient for queue workers
-	result, err := rdb.BRPop(ctx, 5*time.Second, "order_queue").Result()
+	result, err := rdb.BRPop(ctx, 5*time.Second, "score_queue").Result()
 	if err == redis.Nil {
-		return // timeout, loop again
+		return
 	}
 	if err != nil {
 		if ctx.Err() != nil {
@@ -65,25 +64,58 @@ func processNext(ctx context.Context, db *sql.DB, rdb *redis.Client) {
 		return
 	}
 
-	orderID, err := strconv.Atoi(result[1])
+	scoreID, err := strconv.Atoi(result[1])
 	if err != nil {
-		slog.Error("invalid order id in queue", "value", result[1])
+		slog.Error("invalid score id in queue", "value", result[1])
+		return
+	}
+
+	var word string
+	var score int
+	err = db.QueryRowContext(ctx,
+		`SELECT word, score FROM word_scores WHERE id = $1 AND status = 'pending'`,
+		scoreID,
+	).Scan(&word, &score)
+	if err == sql.ErrNoRows {
+		return
+	}
+	if err != nil {
+		slog.Error("failed to load score", "score_id", scoreID, "error", err)
 		return
 	}
 
 	_, err = db.ExecContext(ctx,
-		`UPDATE orders SET status = 'processed', updated_at = NOW() WHERE id = $1 AND status = 'pending'`,
-		orderID,
+		`UPDATE word_scores SET status = 'indexed' WHERE id = $1`,
+		scoreID,
 	)
 	if err != nil {
-		slog.Error("failed to process order", "order_id", orderID, "error", err)
-		// Re-enqueue on failure so we don't lose the job
-		_ = rdb.LPush(ctx, "order_queue", orderID).Err()
+		slog.Error("failed to mark score indexed", "score_id", scoreID, "error", err)
+		_ = rdb.LPush(ctx, "score_queue", scoreID).Err()
 		time.Sleep(time.Second)
 		return
 	}
 
-	slog.Info("order processed", "order_id", orderID)
+	// Sorted set + live stats cache (served by GET /api/stats).
+	pipe := rdb.Pipeline()
+	pipe.ZAdd(ctx, "leaderboard", redis.Z{Score: float64(score), Member: fmt.Sprintf("%d", scoreID)})
+	pipe.Incr(ctx, "stats:games")
+	pipe.IncrBy(ctx, "stats:points_sum", int64(score))
+	pipe.SAdd(ctx, "stats:words", strings.ToLower(word))
+
+	curTop, _ := rdb.Get(ctx, "stats:top_score").Int()
+	if score > curTop {
+		pipe.Set(ctx, "stats:top_score", score, 0)
+	}
+	if _, err := pipe.Exec(ctx); err != nil {
+		slog.Warn("failed to update redis cache", "score_id", scoreID, "error", err)
+	}
+
+	// Keep unique word count in sync (approximate via SCARD).
+	if n, err := rdb.SCard(ctx, "stats:words").Result(); err == nil {
+		_ = rdb.Set(ctx, "stats:unique_words", n, 0).Err()
+	}
+
+	slog.Info("score indexed", "score_id", scoreID, "word", word, "score", score)
 }
 
 func envOr(key, fallback string) string {

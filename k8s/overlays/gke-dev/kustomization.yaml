@@ -4,6 +4,8 @@ kind: Kustomization
 resources:
   - ../../base
 
+# Lean profile: 1 zonal node (e2-medium). API gets extra memory for embedded dictionary maps.
+
 patches:
   - target:
       kind: ConfigMap
@@ -31,6 +33,18 @@ patches:
       - op: replace
         path: /spec/template/spec/terminationGracePeriodSeconds
         value: 15
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 50m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 256Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 500m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 512Mi
   - target:
       kind: Deployment
       name: frontend
@@ -47,6 +61,51 @@ patches:
       - op: replace
         path: /spec/template/spec/terminationGracePeriodSeconds
         value: 15
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 25m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 48Mi
+  - target:
+      kind: Deployment
+      name: worker
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 25m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 48Mi
+  - target:
+      kind: Deployment
+      name: redis
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 25m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 48Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 96Mi
+  - target:
+      kind: StatefulSet
+      name: postgres
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 50m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 128Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 300m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 256Mi
   - target:
       kind: PodDisruptionBudget
       name: api-pdb
@@ -77,7 +136,7 @@ patches:
         value: 1
       - op: replace
         path: /spec/maxReplicas
-        value: 2
+        value: 1
 
 images:
   - name: kubelab-api

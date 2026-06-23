@@ -2,10 +2,10 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: cleanup-stale-orders
+  name: cleanup-old-scores
   namespace: kubelab
   labels:
-    app.kubernetes.io/name: cleanup-stale-orders
+    app.kubernetes.io/name: cleanup-old-scores
     app.kubernetes.io/component: cronjob
 spec:
   schedule: "0 3 * * *"    # Every day at 3 AM UTC
@@ -36,8 +36,7 @@ spec:
                 - -c
                 - |
                   psql -h postgres -U kubelab -d kubelab -c "
-                    DELETE FROM orders
-                    WHERE status = 'pending'
-                    AND created_at < NOW() - INTERVAL '30 days';
+                    DELETE FROM word_scores
+                    WHERE created_at < NOW() - INTERVAL '90 days';
                   "
                   echo "Cleanup complete"
